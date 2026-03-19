@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sıla Yolu: Kornwestheim'dan Türkiye'ye</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Chosen Palette: Warm Neutrals & Eco Teal (Slate-50 to Slate-900, Teal-600 for hybrid, Amber-500 for alerts/borders) -->
+    <!-- Application Structure Plan: A dashboard-style layout designed for road-trippers. Instead of reading a massive block of text, the user gets an interactive chronological timeline (The Route). Clicking any point on the timeline updates a 'Detail Panel' with crucial border/toll information. Below the interactive route, analytical charts visualize the journey's country breakdown and the hybrid vehicle's fuel efficiency, followed by a quick checklist. This structure prioritizes immediate, actionable travel intelligence. -->
+    <!-- Visualization & Content Choices: 
+         1. Interactive Timeline (HTML/CSS/JS): Goal: Show chronological steps (borders/tolls). Interaction: Clickable nodes update details. Justification: Best for spatial/temporal travel data without overwhelming the user.
+         2. Doughnut Chart (Chart.js): Goal: Visualize distance per country. Interaction: Hover for exact KM. Justification: Quick mental model of where the most driving occurs.
+         3. Bar Chart (Chart.js): Goal: Highlight Toyota Corolla Hybrid advantage. Interaction: Hover for liter comparison. Justification: Validates vehicle choice and plans fuel stops. 
+         * NO SVG/Mermaid used. CSS shapes and Unicode icons are utilized for visual markers. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        /* Custom styles for specific elements not easily handled by standard Tailwind classes */
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f8fafc;
+            /* slate-50 */
+            color: #0f172a;
+            /* slate-900 */
+        }
+
+        .timeline-container {
+            position: relative;
+            padding-left: 2rem;
+        }
+
+        .timeline-line {
+            position: absolute;
+            left: 0.75rem;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background-color: #cbd5e1;
+            /* slate-300 */
+            border-radius: 2px;
+        }
+
+        .timeline-node {
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .timeline-node:hover {
+            transform: translateX(5px);
+        }
+
+        .timeline-dot {
+            position: absolute;
+            left: -2.35rem;
+            top: 1.25rem;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #fff;
+            border: 4px solid #0f172a;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+
+        .timeline-node.active .timeline-dot {
+            border-color: #0d9488;
+            /* teal-600 */
+            background-color: #ccfbf1;
+            /* teal-50 */
+            box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.2);
+        }
+
+        .timeline-node.active .timeline-card {
+            border-color: #0d9488;
+            background-color: #f0fdfa;
+            /* teal-50 */
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+
+        /* Hide scrollbar for cleaner look in timeline */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+
+<body class="antialiased selection:bg-teal-200 selection:text-teal-900">
+
+    <!-- Header -->
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
+        <div
+            class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight">🛣️ Sıla Yolu Seyahat Planı</h1>
+                <p class="text-slate-400 text-sm mt-1">Kornwestheim ➡️ Belgrad ➡️ Türkiye</p>
+            </div>
+            <div class="bg-slate-800 rounded-lg px-4 py-2 border border-slate-700 flex items-center gap-3">
+                <span class="text-2xl">🚗</span>
+                <div>
+                    <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Seçili Araç</p>
+                    <p class="text-sm font-medium text-teal-400">Toyota Corolla Hybrid 1.8 Kombi (2024)</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
+
+        <!-- Introduction Section -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
+            <h2 class="text-xl font-bold text-slate-800 mb-3">Hoş Geldiniz, Yolculuk Başlıyor!</h2>
+            <p class="text-slate-600 leading-relaxed mb-4">
+                Bu interaktif rehber, <strong>Teckstr. 28, Kornwestheim'dan</strong> yola çıkarak, ilk gün <strong>Hotel
+                    Hedonic (Belgrad)</strong>'da konaklamalı ve ardından <strong>Kapıkule, Türkiye</strong>'ye uzanan
+                seyahatiniz için özel olarak hazırlanmıştır.
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                Aşağıdaki haritadan güzergahınız üzerindeki kritik noktaları (gişeler, vinyet kontrolleri ve sınır
+                kapıları) inceleyebilirsiniz. Toplam mesafe yaklaşık <strong>1.770 km</strong>'dir. Toyota Corolla
+                Hybrid aracınızın düşük yakıt tüketimi sayesinde bu uzun yolculuğu oldukça ekonomik ve konforlu
+                geçireceksiniz.
+            </p>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                    <p class="text-sm text-slate-500 mb-1">Toplam Mesafe</p>
+                    <p class="text-2xl font-bold text-slate-800">~1.770 <span class="text-base font-normal">km</span>
+                    </p>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                    <p class="text-sm text-slate-500 mb-1">Tahmini Sürüş</p>
+                    <p class="text-2xl font-bold text-slate-800">18-20 <span class="text-base font-normal">Saat</span>
+                    </p>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                    <p class="text-sm text-slate-500 mb-1">Geçilecek Ülke</p>
+                    <p class="text-2xl font-bold text-slate-800">7</p>
+                </div>
+                <div class="bg-teal-50 p-4 rounded-xl border border-teal-100 text-center">
+                    <p class="text-sm text-teal-600 mb-1">Tahmini Yakıt Tüketimi</p>
+                    <p class="text-2xl font-bold text-teal-800">~4.5 <span class="text-base font-normal">L/100km</span>
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Interactive Route Section -->
+        <section id="route-planner" class="scroll-mt-24">
+            <div class="mb-6 flex justify-between items-end">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-800">📍 İnteraktif Seyahat Haritası</h2>
+                    <p class="text-slate-500 mt-1">Detayları görmek için durakların üzerine tıklayın.</p>
+                </div>
+                <!-- Day Filters -->
+                <div class="flex space-x-2 bg-slate-200 p-1 rounded-lg">
+                    <button id="btn-day-1"
+                        class="px-4 py-2 text-sm font-medium rounded-md bg-white shadow-sm text-slate-800 transition-colors"
+                        onclick="filterDay(1)">1. Gün</button>
+                    <button id="btn-day-2"
+                        class="px-4 py-2 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-colors"
+                        onclick="filterDay(2)">2. Gün</button>
+                    <button id="btn-day-all"
+                        class="px-4 py-2 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-colors"
+                        onclick="filterDay('all')">Tümü</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+
+                <!-- Timeline Column -->
+                <div
+                    class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-[600px] overflow-y-auto no-scrollbar">
+                    <div class="timeline-container" id="timeline-container">
+                        <div class="timeline-line"></div>
+                        <!-- Timeline Nodes Injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Details Panel Column -->
+                <div class="lg:col-span-3">
+                    <div id="detail-panel"
+                        class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 sticky top-24 h-[600px] flex flex-col justify-center items-center text-center transition-all duration-300">
+                        <div class="text-6xl mb-4 opacity-50">👆</div>
+                        <h3 class="text-xl font-semibold text-slate-400">Haritadan bir nokta seçin</h3>
+                        <p class="text-slate-500 mt-2">Vinyet, gişe ve sınır kontrol detayları burada görüntülenecektir.
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Analytics Section -->
+        <section>
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-slate-800">📊 Seyahat ve Araç Analizi</h2>
+                <p class="text-slate-500 mt-1">Yol dağılımı ve Toyota Corolla Hybrid yakıt performansınız.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Chart 1: Distance by Country -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                    <h3 class="text-lg font-semibold text-slate-800 mb-4 text-center">Ülkelere Göre Mesafe Dağılımı</h3>
+                    <div class="chart-container">
+                        <canvas id="countryChart"></canvas>
+                    </div>
+                    <p class="text-sm text-slate-500 text-center mt-4">En uzun sürüş Hırvatistan ve Sırbistan
+                        otoyollarında gerçekleşecektir.</p>
+                </div>
+
+                <!-- Chart 2: Fuel Consumption Comparison -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                    <h3 class="text-lg font-semibold text-slate-800 mb-4 text-center">Yakıt Tüketimi (Corolla Hybrid vs
+                        Standart Benzinli)</h3>
+                    <div class="chart-container">
+                        <canvas id="fuelChart"></canvas>
+                    </div>
+                    <p class="text-sm text-slate-500 text-center mt-4">Corolla Hybrid (1.8 Kombi) sınır beklemelerinde
+                        elektrik motorunu kullanarak büyük tasarruf sağlar.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Checklist Section -->
+        <section class="bg-slate-900 text-white rounded-2xl shadow-lg p-6 md:p-8 mb-12">
+            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2"><span>📋</span> Yola Çıkmadan Önce Son
+                Kontroller</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <h4 class="text-teal-400 font-semibold mb-3 border-b border-slate-700 pb-2">Evraklar</h4>
+                    <ul class="space-y-2 text-slate-300 text-sm">
+                        <li class="flex items-start gap-2"><span>✅</span> Pasaportlar (En az 6 ay geçerli)</li>
+                        <li class="flex items-start gap-2"><span>✅</span> Oturum Kartları (Almanya)</li>
+                        <li class="flex items-start gap-2"><span>✅</span> Araç Ruhsatı</li>
+                        <li class="flex items-start gap-2"><span>✅</span> Uluslararası Yeşil Sigorta (TR dahil olmalı)
+                        </li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-amber-400 font-semibold mb-3 border-b border-slate-700 pb-2">Vinyet & Ödemeler</h4>
+                    <ul class="space-y-2 text-slate-300 text-sm">
+                        <li class="flex items-start gap-2"><span>🇦🇹</span> Avusturya: 10 Günlük Vinyet</li>
+                        <li class="flex items-start gap-2"><span>🇸🇮</span> Slovenya: 1 Aylık/Haftalık Vinyet</li>
+                        <li class="flex items-start gap-2"><span>🇧🇬</span> Bulgaristan: 1 Aylık e-Vinyet</li>
+                        <li class="flex items-start gap-2"><span>💶</span> Bozuk Para (Tünel, WC ve
+                            Sırbistan/Hırvatistan gişeleri için)</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-blue-400 font-semibold mb-3 border-b border-slate-700 pb-2">Araç & Konaklama</h4>
+                    <ul class="space-y-2 text-slate-300 text-sm">
+                        <li class="flex items-start gap-2"><span>🛏️</span> Hotel Hedonic Rezervasyon Çıktısı/Kodu</li>
+                        <li class="flex items-start gap-2"><span>🦺</span> Reflektörlü Yelek (Her yolcu için)</li>
+                        <li class="flex items-start gap-2"><span>🧰</span> İlkyardım Çantası & Uyarı Üçgeni</li>
+                        <li class="flex items-start gap-2"><span>🔋</span> Lastik Basıncı Kontrolü (Yüklü araç ayarı)
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Application Logic -->
+    <script>
+        // 1. DATA STORAGE: The core information architecture for the route
+        const routeData = [
+            {
+                id: 'stop-1',
+                day: 1,
+                km: 0,
+                icon: '🏁',
+                country: '🇩🇪 Almanya',
+                title: 'Kalkış: Kornwestheim',
+                type: 'start',
+                location: 'Teckstr. 28, Kornwestheim',
+                desc: 'Yolculuğumuz başlıyor. A8 otoyolu üzerinden Münih/Salzburg yönüne doğru hareket edeceksiniz. Hibrit aracınızın batarya durumunu ve lastik basınçlarını son kez kontrol edin.',
+                actions: ['Gerekli evrakların torpidoda olduğundan emin olun.', 'Navigasyonu Salzburg yönüne ayarlayın.']
+            },
+            {
+                id: 'stop-2',
+                day: 1,
+                km: 330,
+                icon: '🎫',
+                country: '🇦🇹 Avusturya',
+                title: 'Avusturya Sınırı & Vinyet',
+                type: 'vignette',
+                location: 'Walserberg Sınırı',
+                desc: 'Almanya çıkışı ve Avusturya girişi. Schengen bölgesi olduğu için fiziksel sınır kontrolü yoktur, transit geçilir. Ancak otoyol kullanımı için vinyet ŞARTTIR.',
+                actions: ['Sınıra gelmeden önceki son Alman benzinliklerinden Avusturya Vinyeti alın.', 'Dijital vinyet aldıysanız (ASFINAG) plakanızın sisteme kayıtlı olduğundan emin olun.']
+            },
+            {
+                id: 'stop-3',
+                day: 1,
+                km: 530,
+                icon: '🛂',
+                country: '🇸🇮 Slovenya',
+                title: 'Slovenya Sınırı & Karavanke Tüneli',
+                type: 'toll_border',
+                location: 'Karawanken Tüneli',
+                desc: 'Avusturya - Slovenya sınırı bir tünel ile geçilir. Tünel gişelidir ve ekstra ücrete tabidir. Tünel sonrası Slovenya topraklarına girersiniz.',
+                actions: ['Karavanke Tüneli geçiş ücretini (gişede nakit veya kartla) ödeyin.', 'Slovenya otoyolları için e-vinyet mecburidir. Önceden online almak vakit kazandırır.']
+            },
+            {
+                id: 'stop-4',
+                day: 1,
+                km: 680,
+                icon: '🛂',
+                country: '🇭🇷 Hırvatistan',
+                title: 'Hırvatistan Sınırı (Bregana) & Gişeler',
+                type: 'border_toll',
+                location: 'Obrežje / Bregana Sınırı',
+                desc: 'Slovenya çıkışı, Hırvatistan girişi. Hırvatistan artık Schengen dahilindedir, yoğun kontroller kalkmıştır ancak rastgele kontroller olabilir. Hırvatistan\'da VİNYET YOKTUR, gişe sistemi vardır.',
+                actions: ['Sınırdan geçtikten sonra Hırvatistan otoyol gişesinden (Lučko veya ilk gişe) biletinizi alın.', 'Hırvatistan çıkışında (Bajakovo) aldığınız bu biletle ödeme yapacaksınız (Nakit/Kart/Euro kabul edilir).']
+            },
+            {
+                id: 'stop-5',
+                day: 1,
+                km: 970,
+                icon: '🛑',
+                country: '🇷🇸 Sırbistan',
+                title: 'Sırbistan Sınırı (Batrovci) - AB ÇIKIŞI',
+                type: 'strict_border',
+                location: 'Bajakovo / Batrovci Sınır Kapısı',
+                desc: 'DİKKAT: Avrupa Birliği (Schengen) bölgesinden çıkıyorsunuz. Burada Hırvat polisince çıkış, Sırp polisince giriş işlemi yapılır. Yoğun sezonda bekleme süreleri uzayabilir. Corolla Hybrid\'iniz dur-kalk trafikte elektrikli sürüşle yakıt tasarrufu sağlayacaktır.',
+                actions: ['Hırvatistan otoyol ücretini ödeyin.', 'Pasaportlarınızı, araç ruhsatınızı ve Yeşil Sigorta kartınızı (Sırbistan için geçerli olmalı) hazırlayın.', 'Sırbistan otoyoluna girerken gişeden bilet alın.']
+            },
+            {
+                id: 'stop-6',
+                day: 1,
+                km: 1080,
+                icon: '🏨',
+                country: '🇷🇸 Sırbistan',
+                title: '1. Gün Sonu: Konaklama',
+                type: 'hotel',
+                location: 'Hotel Hedonic, Belgrad',
+                desc: 'Günün sonu! E75 otoyolu üzerinde, 13 numaralı adreste bulunan Hotel Hedonic\'e ulaştınız. Puanı 9.1 olan bu otel, transit yolcular için mükemmel bir dinlenme noktasıdır.',
+                actions: ['Araç kapılarını kilitleyin, değerli eşyalarınızı otel odasına alın.', 'İyi bir uyku çekin, ertesi gün Bulgaristan ve Türkiye var.']
+            },
+            {
+                id: 'stop-7',
+                day: 2,
+                km: 1080,
+                icon: '🌅',
+                country: '🇷🇸 Sırbistan',
+                title: '2. Gün Başlangıcı',
+                type: 'start',
+                location: 'Hotel Hedonic, Belgrad',
+                desc: 'Sabah erken saatlerde Belgrad\'dan Niş ve Sofya (Bulgaristan) yönüne doğru (E80/A4) hareket.',
+                actions: ['Sırbistan otoyol biletinizi kaybetmeyin, Bulgaristan sınırına (Gradina) yaklaşırken ödeme yapacaksınız.']
+            },
+            {
+                id: 'stop-8',
+                day: 2,
+                km: 1410,
+                icon: '🛂',
+                country: '🇧🇬 Bulgaristan',
+                title: 'Bulgaristan Sınırı (Kalotina) - AB GİRİŞİ',
+                type: 'border_vignette',
+                location: 'Gradina / Kalotina Sınır Kapısı',
+                desc: 'Yeniden Avrupa Birliği sınırlarına giriş. Sırbistan çıkış ve Bulgaristan giriş gümrük kontrolleri yapılır. Bagaj kontrolü olabilir.',
+                actions: ['Sırbistan otoyol ücretini ödeyin.', 'Pasaport ve gümrük kontrollerinden geçin.', 'DİKKAT: Bulgaristan sınırını geçer geçmez BGTOLL makinesinden veya online olarak Bulgaristan e-Vinyeti (Haftalık veya Aylık) ALIN. Cezaları yüksektir.']
+            },
+            {
+                id: 'stop-9',
+                day: 2,
+                km: 1770,
+                icon: '🇹🇷',
+                country: '🇹🇷 Türkiye',
+                title: 'Türkiye Sınırı (Kapıkule)',
+                type: 'destination',
+                location: 'Kapıkule Sınır Kapısı',
+                desc: 'Memlekete hoş geldiniz! Uzun yolculuğun sınır geçişi anlamında son noktası. Pasaport kontrolü (Polis) ve araç giriş kaydı (Gümrük) yapılır.',
+                actions: ['Pasaportlarınızı polise ibraz edin.', 'Araç sahibinin ruhsat ve Yeşil Sigorta ile gümrük peronunda aracı pasaportuna işletmesi gerekir.', 'Sınırı geçtikten sonra Türkiye otoyolları için HGS etiketi alın veya mevcut HGS bakiyenizi kontrol edin.']
+            }
+        ];
+
+        // 2. CORE INTERACTION HANDLING
+        const timelineContainer = document.getElementById('timeline-container');
+        const detailPanel = document.getElementById('detail-panel');
+        let currentDayFilter = 'all';
+
+        // Render Timeline
+        function renderTimeline(filterDay) {
+            timelineContainer.innerHTML = '<div class="timeline-line"></div>'; // Reset
+
+            routeData.forEach((stop, index) => {
+                if (filterDay !== 'all' && stop.day !== filterDay) return;
+
+                // Color coding based on type
+                let typeColors = 'bg-white border-slate-900';
+                if (stop.type.includes('border')) typeColors = 'bg-amber-100 border-amber-500 text-amber-900';
+                if (stop.type.includes('vignette')) typeColors = 'bg-blue-100 border-blue-500 text-blue-900';
+                if (stop.type === 'hotel') typeColors = 'bg-indigo-100 border-indigo-500 text-indigo-900';
+                if (stop.type === 'destination') typeColors = 'bg-red-100 border-red-500 text-red-900';
+                if (stop.type === 'start') typeColors = 'bg-teal-100 border-teal-500 text-teal-900';
+
+                const nodeHTML = `
+                    <div class="timeline-node pb-10" onclick="showDetails('${stop.id}', this)">
+                        <div class="timeline-dot flex items-center justify-center text-xs ${typeColors}">
+                            <span class="sr-only">${stop.type}</span>
+                        </div>
+                        <div class="timeline-card bg-white p-4 rounded-xl border border-slate-200 shadow-sm ml-2">
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="text-xs font-bold text-teal-600 uppercase tracking-wider">${stop.km} KM</span>
+                                <span class="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600 font-medium">Gün ${stop.day}</span>
+                            </div>
+                            <h4 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <span>${stop.icon}</span> ${stop.title}
+                            </h4>
+                            <p class="text-sm text-slate-500 mt-1 line-clamp-2">${stop.desc}</p>
+                        </div>
+                    </div>
+                `;
+                timelineContainer.insertAdjacentHTML('beforeend', nodeHTML);
+            });
+        }
+
+        // Show Details in Panel
+        function showDetails(id, element) {
+            // Manage Active State
+            document.querySelectorAll('.timeline-node').forEach(node => node.classList.remove('active'));
+            element.classList.add('active');
+
+            const stop = routeData.find(s => s.id === id);
+            if (!stop) return;
+
+            // Generate Action List
+            const actionsHTML = stop.actions.map(act => `<li class="flex items-start gap-2 mb-2"><span class="text-teal-500">▶</span><span>${act}</span></li>`).join('');
+
+            const panelContent = `
+                <div class="w-full h-full flex flex-col text-left animate-[fadeIn_0.3s_ease-in-out]">
+                    <div class="flex items-center gap-3 mb-4 border-b border-slate-100 pb-4">
+                        <span class="text-4xl">${stop.icon}</span>
+                        <div>
+                            <p class="text-sm font-semibold text-slate-400 uppercase tracking-widest">${stop.country} • ${stop.km} KM</p>
+                            <h3 class="text-2xl font-bold text-slate-800">${stop.title}</h3>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6 flex-grow">
+                        <h4 class="text-sm font-semibold text-slate-800 mb-2 uppercase tracking-wide">Konum / Adres</h4>
+                        <p class="text-slate-600 mb-6 bg-slate-50 p-3 rounded-lg border border-slate-100">${stop.location}</p>
+                        
+                        <h4 class="text-sm font-semibold text-slate-800 mb-2 uppercase tracking-wide">Açıklama</h4>
+                        <p class="text-slate-600 leading-relaxed">${stop.desc}</p>
+                    </div>
+
+                    <div class="bg-amber-50 rounded-xl p-5 border border-amber-100">
+                        <h4 class="text-sm font-bold text-amber-800 mb-3 uppercase tracking-wide flex items-center gap-2">
+                            <span>⚠️</span> Yapılması Gerekenler / Kontroller
+                        </h4>
+                        <ul class="text-sm text-amber-900">
+                            ${actionsHTML}
+                        </ul>
+                    </div>
+                </div>
+            `;
+
+            detailPanel.innerHTML = panelContent;
+
+            // On mobile, scroll to detail panel smoothly
+            if (window.innerWidth < 1024) {
+                detailPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        // Filter Logic
+        function filterDay(day) {
+            currentDayFilter = day;
+
+            // Update button styles
+            document.querySelectorAll('[id^="btn-day-"]').forEach(btn => {
+                btn.className = "px-4 py-2 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-colors";
+            });
+
+            const activeBtn = document.getElementById(`btn-day-${day}`);
+            activeBtn.className = "px-4 py-2 text-sm font-medium rounded-md bg-white shadow-sm text-slate-800 transition-colors";
+
+            renderTimeline(day);
+
+            // Reset detail panel
+            detailPanel.innerHTML = `
+                <div class="text-6xl mb-4 opacity-50">👆</div>
+                <h3 class="text-xl font-semibold text-slate-400">Haritadan bir nokta seçin</h3>
+                <p class="text-slate-500 mt-2">Vinyet, gişe ve sınır kontrol detayları burada görüntülenecektir.</p>
+            `;
+        }
+
+        // 3. CHART IMPLEMENTATIONS (Chart.js)
+        function initCharts() {
+            // Chart 1: Distance Distribution
+            const ctxCountry = document.getElementById('countryChart').getContext('2d');
+
+            // Approximate distances based on route:
+            // GER (Kornwestheim to Salzburg): ~330km
+            // AUT (Salzburg to Karavanke): ~200km
+            // SLO (Karavanke to Bregana): ~150km
+            // CRO (Bregana to Batrovci): ~290km
+            // SRB (Batrovci to Gradina): ~440km
+            // BUL (Gradina to Kapikule): ~360km
+
+            new Chart(ctxCountry, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Almanya', 'Avusturya', 'Slovenya', 'Hırvatistan', 'Sırbistan', 'Bulgaristan'],
+                    datasets: [{
+                        data: [330, 200, 150, 290, 440, 360],
+                        backgroundColor: [
+                            '#334155', // slate-700
+                            '#ef4444', // red-500
+                            '#22c55e', // green-500
+                            '#3b82f6', // blue-500
+                            '#f59e0b', // amber-500
+                            '#14b8a6'  // teal-500
+                        ],
+                        borderWidth: 0,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 15 } },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    return ' ' + context.label + ': ~' + context.raw + ' km';
+                                }
+                            }
+                        }
+                    },
+                    cutout: '65%'
+                }
+            });
+
+            // Chart 2: Fuel Consumption Comparison
+            const ctxFuel = document.getElementById('fuelChart').getContext('2d');
+
+            // Calculation: 1770km total. 
+            // Hybrid: ~4.5L/100km -> ~79.6 Liters
+            // Standard Gas: ~7.0L/100km -> ~123.9 Liters
+
+            new Chart(ctxFuel, {
+                type: 'bar',
+                data: {
+                    labels: ['Tahmini Yakıt İhtiyacı (1770 km)'],
+                    datasets: [
+                        {
+                            label: 'Corolla Hybrid 1.8 (4.5 L/100km)',
+                            data: [80],
+                            backgroundColor: '#0d9488', // teal-600
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Standart Benzinli Araç (7.0 L/100km)',
+                            data: [124],
+                            backgroundColor: '#94a3b8', // slate-400
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Litre (L)' },
+                            grid: { color: '#f1f5f9' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    return ' ' + context.dataset.label + ': ' + context.raw + ' Litre';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initialize App
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTimeline('all');
+            initCharts();
+
+            // Simple fade in keyframe for JS dynamic content
+            const style = document.createElement('style');
+            style.innerHTML = `
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+            `;
+            document.head.appendChild(style);
+        });
+    </script>
+</body>
+
+</html>
